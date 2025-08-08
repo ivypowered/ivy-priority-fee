@@ -9,6 +9,7 @@ const DEFAULT_RPC_URL: &str = "https://api.mainnet-beta.solana.com";
 const JUPITER_AGGREGATOR_V6: &str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
 const MAX_RESPONSE_LEN: u64 = 100_000_000;
 const MAX_RETRIES: usize = 10;
+const MAX_PRIORITY_FEE: u64 = 999_999;
 
 fn main() {
     let rpc_url = env::var("RPC_URL").unwrap_or_else(|_| DEFAULT_RPC_URL.to_string());
@@ -61,13 +62,13 @@ fn get_reasonable_priority_fee(rpc_url: &str) -> Result<u64, Box<dyn std::error:
         return Err(e);
     }
 
-    // 3) Take median, clamp at [0, 5_000_000]
+    // 3) Take 1st tertile, clamp at [0, MAX_PRIORITY_FEE]
     if priority_fees.is_empty() {
         return Ok(0);
     }
     priority_fees.sort_unstable();
-    let median = priority_fees[priority_fees.len() / 2];
-    Ok(median.min(5_000_000))
+    let first_tertile = priority_fees[priority_fees.len() / 3];
+    Ok(first_tertile.min(MAX_PRIORITY_FEE))
 }
 
 // --------------------------- JSON-RPC plumbing ---------------------------
@@ -214,12 +215,12 @@ fn get_priority_fees_for_signatures(
 
         let tr = match item.result {
             Some(r) => r,
-            None => continue,
+            _ => continue,
         };
 
         let meta = match tr.meta {
             Some(m) => m,
-            None => continue,
+            _ => continue,
         };
 
         let compute_units = meta.compute_units_consumed.unwrap_or(0) as i64;
